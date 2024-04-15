@@ -50,6 +50,18 @@ public class ImportController {
     ResponseEntity<String> response = importService.convertExcelToJson(file);
     return  response;
     }
+    @PostMapping("/xml")
+    public ResponseEntity<String> uploadXmlFile(@RequestParam("xmlFile") MultipartFile file) {
+        if (!isFileTypeValid(file, "xml")) {
+            return ResponseEntity.status(400).body("Error: Invalid file type. Only XML files are allowed.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            String errorSizeMessage = "Error: File size exceeds the maximum limit of " + MAX_FILE_SIZE / (1024 * 1024) + " MB. ";
+            return ResponseEntity.status(413).body(errorSizeMessage);
+        }
+        ResponseEntity<String> response = importService.convertXmlToJson(file);
+                return response;
+    }
     private boolean isFileTypeValid(MultipartFile file, String expectedType) {
         String fileExtension = FilenameUtils.getExtension(file.getOriginalFilename()).toLowerCase();
         return fileExtension.equals(expectedType);

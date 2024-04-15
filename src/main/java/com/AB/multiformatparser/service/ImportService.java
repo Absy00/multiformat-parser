@@ -2,6 +2,9 @@ package com.AB.multiformatparser.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.JsonParseException;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.apache.poi.ss.usermodel.Cell;
@@ -13,6 +16,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXParseException;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.io.*;
@@ -74,7 +84,6 @@ public class ImportService {
             return ResponseEntity.status(500).body(null);
         }
     }
-
     private Map<String, Object> processJsonData(Object jsonData) throws JsonProcessingException {
         if (jsonData instanceof Map) {
             return JsonFlattener.flattenAsMap(new ObjectMapper().writeValueAsString(jsonData));
@@ -82,7 +91,6 @@ public class ImportService {
             return new HashMap<>();
         }
     }
-
     private void setCellValueByType(Cell cell, Object value) {
         if (value instanceof String) {
             cell.setCellValue((String) value);
@@ -95,7 +103,7 @@ public class ImportService {
         }
     }
 
-    public ResponseEntity<String>   convertExcelToJson(MultipartFile    file) {
+    public ResponseEntity<String>   convertExcelToJson(MultipartFile file) {
         try {
             InputStream is = file.getInputStream();
             Workbook workbook = new XSSFWorkbook(is);
@@ -129,6 +137,49 @@ public class ImportService {
             e.printStackTrace();
             return ResponseEntity.status(500).body(null);
         }
+    }
+    public ResponseEntity<String> convertXmlToJson(MultipartFile file) {
+        try {
+            InputStream is = file.getInputStream();
+            byte[] bytes = is.readAllBytes();
+            InputStream isForParsing = new ByteArrayInputStream(bytes);
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(isForParsing);
+            JSONObject jsonObject = documentToJsonObject(doc.getDocumentElement());
+            String jsonString = jsonObject.toString();
+            SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMdd_HHmmss");
+            String fileName = "output_" + formatter.format(new Date()) + ".json";
+            return ResponseEntity
+                    .ok()
+                    .header("Content-Disposition", "attachment; filename=" + fileName)
+                    .body(jsonString);
+        } catch (SAXParseException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(400).body("Error: Could not parse XML file. Please check the file format.");
+        } catch (Exception e)   {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error: Could not convert XML to JSON.");
+        }
+
+    }
+    private JSONObject documentToJsonObject(Node node) throws JSONException {
+        JSONObject obj = new JSONObject();
+        JSONArray jsonArray = new JSONArray();
+        if (node.getNodeType() == Node.TEXT_NODE) {
+            obj.put("value", node.getNodeValue());
+            jsonArray.put(obj);
+        } else if (node.getNodeType() == Node.ELEMENT_NODE) {
+            String name = node.getNodeName();
+            obj.put(name, jsonArray);
+            NodeList childNodes = node.getChildNodes();
+            for (int i = 0; i < childNodes.getLength(); i++) {
+                Node childNode = childNodes.item(i);
+                JSONObject childJsonObject = documentToJsonObject(childNode);
+                jsonArray.put(childJsonObject);
+            }
+        }
+        return obj;
     }
 
 }
